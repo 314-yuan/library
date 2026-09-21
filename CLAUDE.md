@@ -30,7 +30,7 @@
 ## 实验进度
 
 - 实验一（已完成）：User 基类 + Admin/Reader 派生类 + 登录菜单框架（`main.cpp`）。
-- 实验二（待做）：图书管理（Book/BookManager）+ CSV 文件读写（FileUtil）。
+- 实验二（已完成）：图书管理（Book/BookManager）+ CSV 文件读写（FileUtil），图书与用户数据持久化到 `data/*.csv`。
 - 实验三（待做）：借阅/归还管理（BorrowRecord/BorrowManager）+ 逾期罚款。
 
 ## 默认账号（演示用）

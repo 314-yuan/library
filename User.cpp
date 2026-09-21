@@ -1,32 +1,26 @@
-﻿// 该指令仅对 MSVC 有效：把窄字符串字面量的编码指定为 UTF-8，
-// 保证中文在控制台（配合 chcp 65001）中正确显示。
+﻿// 该指令仅对 MSVC 有效：把窄字符串字面量编码指定为 UTF-8。
 #ifdef _MSC_VER
 #pragma execution_character_set("utf-8")
 #endif
 
 #include "User.h"
+#include "FileUtil.h"
 #include <iostream>
 
 using namespace std;
 
 // ==================== 基类 User ====================
 
-// 构造函数使用“初始化列表”初始化成员变量，效率更高、更规范
 User::User(const string& u, const string& p, const string& n)
     : username(u), password(p), name(n) {}
 
 // ==================== 派生类 Admin ====================
 
-// 派生类构造函数：先调用基类构造函数初始化基类部分，再初始化自己的成员
 Admin::Admin(const string& u, const string& p, const string& n)
     : User(u, p, n) {}
 
-// 重写基类纯虚函数：返回角色名
-string Admin::getRole() const {
-    return "管理员";
-}
+string Admin::getRole() const { return "管理员"; }
 
-// 重写基类纯虚函数：显示管理员菜单
 void Admin::showMenu() {
     cout << "\n================ 管理员菜单 ================\n";
     cout << "  1. 图书管理\n";
@@ -37,17 +31,19 @@ void Admin::showMenu() {
     cout << "===========================================\n";
 }
 
+// 管理员序列化为 CSV（统一 8 列，管理员不用的字段填空或 0）
+vector<string> Admin::toCSV() const {
+    return { "admin", username, password, name, "", "", "0", "0" };
+}
+
 // ==================== 派生类 Reader ====================
 
 Reader::Reader(const string& u, const string& p, const string& n,
                const string& g, const string& ph, int limit)
-    : User(u, p, n),          // 先初始化基类部分
-      gender(g), phone(ph),   // 再初始化派生类自己的成员
+    : User(u, p, n), gender(g), phone(ph),
       borrowLimit(limit), borrowedCount(0) {}
 
-string Reader::getRole() const {
-    return "读者";
-}
+string Reader::getRole() const { return "读者"; }
 
 void Reader::showMenu() {
     cout << "\n================ 读者菜单 ================\n";
@@ -60,26 +56,58 @@ void Reader::showMenu() {
     cout << "=========================================\n";
 }
 
-// ==================== UserManager ====================
-
-UserManager::UserManager() {
-    // 实验一：先用内存中的默认数据演示（实验二改为从 CSV 文件加载）
-    addAdmin(Admin("admin", "123456", "系统管理员"));
-    addReader(Reader("2023001", "123456", "张三", "男", "13800000000", 5));
-    addReader(Reader("2023002", "123456", "李四", "女", "13900000000", 5));
+vector<string> Reader::toCSV() const {
+    return { "reader", username, password, name, gender, phone,
+             to_string(borrowLimit), to_string(borrowedCount) };
 }
 
+// ==================== UserManager ====================
+
+UserManager::UserManager(const string& filePath) : path(filePath) {}
+
 UserManager::~UserManager() {
-    // 遍历基类指针容器，逐个释放。
-    // 因为 User 的析构函数是 virtual 的，这里 delete 基类指针时
-    // 会正确调用对应派生类的析构函数，不会内存泄漏。
+    // 遍历基类指针容器逐个释放；虚析构保证派生类被正确销毁
     for (auto u : users) {
         delete u;
     }
 }
 
+// 从 CSV 加载所有用户
+void UserManager::load() {
+    for (const auto& row : readCSV(path)) {
+        User* u = createUser(row); // 工厂式创建
+        if (u) users.push_back(u);
+    }
+}
+
+// 把所有用户写回 CSV（多态：不同角色生成不同行）
+void UserManager::save() const {
+    vector<vector<string>> rows;
+    for (const auto& u : users) {
+        rows.push_back(u->toCSV());
+    }
+    writeCSV(path, rows);
+}
+
+// 工厂式创建：根据第一列“角色”决定 new 出 Admin 还是 Reader，返回基类指针
+User* UserManager::createUser(const vector<string>& f) {
+    // f 各列：角色,用户名,密码,姓名,性别,电话,借阅上限,已借数量
+    if (f.size() < 4) return nullptr;
+    if (f[0] == "admin") {
+        return new Admin(f[1], f[2], f[3]);
+    } else if (f[0] == "reader") {
+        int limit = f.size() > 6 ? toInt(f[6], 5) : 5;
+        int count = f.size() > 7 ? toInt(f[7], 0) : 0;
+        Reader* r = new Reader(f[1], f[2], f[3],
+                               f.size() > 4 ? f[4] : "",
+                               f.size() > 5 ? f[5] : "", limit);
+        r->setBorrowedCount(count); // 恢复已借数量
+        return r;
+    }
+    return nullptr;
+}
+
 void UserManager::addAdmin(const Admin& a) {
-    // new 一个 Admin，把它的基类指针 push 进容器（向上转型，隐式发生）
     users.push_back(new Admin(a));
 }
 
@@ -96,19 +124,17 @@ bool UserManager::usernameExists(const string& u) const {
 
 User* UserManager::login(const string& u, const string& p) {
     for (auto x : users) {
-        // 用户名匹配且密码正确
         if (x->getUsername() == u && x->checkPassword(p)) {
             return x; // 返回基类指针（可能是 Admin* 或 Reader*）
         }
     }
-    return nullptr; // 登录失败
+    return nullptr;
 }
 
 void UserManager::listAllUsers() const {
     cout << "\n---------------- 用户列表 ----------------\n";
     for (const auto& u : users) {
-        // u->getRole() 是虚函数调用：
-        // 同一句代码，u 实际指向 Admin 时返回“管理员”，指向 Reader 时返回“读者”
+        // u->getRole() 是虚函数调用：同一句代码，实际对象不同返回不同角色名
         cout << "[" << u->getRole() << "] " << u->getUsername()
              << "  " << u->getName() << "\n";
     }
