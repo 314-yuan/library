@@ -5,6 +5,7 @@
 
 #include "BookManager.h"
 #include "FileUtil.h"
+#include "TemplateUtil.h" // 实验五：通用模板函数 findPtr / forEach
 #include <iostream>
 #include <iomanip>
 
@@ -46,9 +47,9 @@ void BookManager::listBooks() const {
          << setw(14) << "作者/期号/格式"
          << setw(12) << "分类/ISSN/来源"
          << setw(8)  << "可借/总\n";
-    for (const auto& b : books) {
-        b->showInfo(); // 虚函数调用：同一句代码，实际对象不同显示不同
-    }
+    // forEach 模板遍历：对每个资源指针调用 showInfo（虚函数，多态显示）
+    forEach(books, [](BookResource* b) { b->showInfo(); });
+    cout << "共 " << books.size() << " 条资源。\n"; // size()：容器元素个数
     cout << "----------------------------------------------\n";
 }
 
@@ -69,12 +70,10 @@ void BookManager::searchBooks(const string& keyword) const {
     cout << "------------------------------------------\n";
 }
 
-// 按编号查找，返回基类指针；找不到返回 nullptr
+// 按编号查找，返回基类指针；找不到返回 nullptr。
+// 用模板函数 findPtr 替换手写循环：lambda 作为谓词判断编号是否匹配。
 BookResource* BookManager::findBook(int id) {
-    for (auto b : books) {
-        if (b->getId() == id) return b;
-    }
-    return nullptr;
+    return findPtr(books, [id](BookResource* b) { return b->getId() == id; });
 }
 
 // 下一个可用编号 = 当前最大编号 + 1（初始从 1001 开始）
