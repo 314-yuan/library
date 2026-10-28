@@ -99,24 +99,26 @@ void BookManager::addBook() {
     int id = getNextId();
     string title = readLine("题名: ");
     string publisher = readLine("出版社/来源: ");
-    int total = readInt("总数量: ");
 
     BookResource* r = nullptr;
     if (type == 1) {
+        int total = readInt("总数量: "); // 纸质资源才需要副本数量
         string author = readLine("作者: ");
         string isbn = readLine("ISBN: ");
         string category = readLine("分类: ");
         r = new GeneralBook(id, title, publisher, total, total, author, isbn, category);
     } else if (type == 2) {
+        int total = readInt("总数量: ");
         string issue = readLine("期号: ");
         string issn = readLine("ISSN: ");
         r = new Magazine(id, title, publisher, total, total, issue, issn);
     } else {
+        // 电子资源无副本数量，不询问总数量，直接询问专属字段
         string format = readLine("文件格式(PDF/EPUB等): ");
         string url = readLine("下载地址/数据库: ");
-        r = new EResource(id, title, publisher, total, total, format, url);
+        r = new EResource(id, title, publisher, format, url);
     }
-    // 新增时所有资源都可借，故可借数量 = 总数量
+    // 新增时纸质资源都可借，故可借数量 = 总数量（电子资源无此概念）
     books.push_back(r);
     save();
     cout << "新增成功，资源编号为 " << id << "。\n";
@@ -156,13 +158,16 @@ void BookManager::updateBook(int id) {
     string p = readLine("新出版社/来源(" + b->getPublisher() + "): ");
     if (!p.empty()) b->setPublisher(p);
 
-    string totalStr = readLine("新总数量(" + to_string(b->getTotal()) + "): ");
-    if (!totalStr.empty()) {
-        int newTotal = toInt(totalStr, b->getTotal());
-        int diff = newTotal - b->getTotal();
-        b->setTotal(newTotal);
-        b->setAvailable(b->getAvailable() + diff); // 可借数量随总数量同步调整
-        if (b->getAvailable() < 0) b->setAvailable(0);
+    // 电子资源无副本数量，跳过“总数量”修改；只有纸质资源才处理
+    if (dynamic_cast<EResource*>(b) == nullptr) {
+        string totalStr = readLine("新总数量(" + to_string(b->getTotal()) + "): ");
+        if (!totalStr.empty()) {
+            int newTotal = toInt(totalStr, b->getTotal());
+            int diff = newTotal - b->getTotal();
+            b->setTotal(newTotal);
+            b->setAvailable(b->getAvailable() + diff); // 可借数量随总数量同步调整
+            if (b->getAvailable() < 0) b->setAvailable(0);
+        }
     }
 
     // 不同类型有不同的专属字段，用 dynamic_cast 判断实际类型后分别处理
