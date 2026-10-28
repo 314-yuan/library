@@ -1,0 +1,97 @@
+@startuml
+' 图书馆借阅管理系统 UML 类图（PlantUML 源码）
+' 使用方法：在 PlantUML 工具中打开此文件渲染成图片，插入设计报告。
+
+skinparam classAttributeIconSize 0
+skinparam classFontName "Microsoft YaHei"
+
+abstract class User {
+  # username : string
+  # password : string
+  # name : string
+  + User(u, p, n)
+  + {abstract} getRole() : string
+  + {abstract} showMenu() : void
+  + {abstract} toCSV() : vector<string>
+  + getUsername() : string
+  + getName() : string
+  + checkPassword(pwd) : bool
+}
+
+class Admin {
+  + Admin(u, p, n)
+  + getRole() : string
+  + showMenu() : void
+  + toCSV() : vector<string>
+}
+
+class Reader {
+  - gender : string
+  - phone : string
+  - borrowLimit : int
+  - borrowedCount : int
+  + getRole() : string
+  + showMenu() : void
+  + toCSV() : vector<string>
+  + canBorrow() : bool
+  + incBorrowed() : void
+  + decBorrowed() : void
+}
+
+class UserManager {
+  - users : vector<User*>
+  - path : string
+  + load() : void
+  + save() : void
+  + addAdmin(a) : void
+  + addReader(r) : void
+  + login(u, p) : User*
+  + listAllUsers() : void
+  + {static} createUser(fields) : User*
+}
+
+class Book {
+  - id : int
+  - title : string
+  - author : string
+  - publisher : string
+  - isbn : string
+  - category : string
+  - total : int
+  - available : int
+  + toCSV() : vector<string>
+  + printInfo() : void
+}
+
+class BookManager {
+  - books : vector<Book>
+  - path : string
+  + load() : void
+  + save() : void
+  + addBook() : void
+  + deleteBook(id) : void
+  + updateBook(id) : void
+  + findBook(id) : Book*
+  + listBooks() : void
+  + searchBooks(kw) : void
+}
+
+class FileUtil {
+  + {static} readCSV(path) : vector<vector<string>>
+  + {static} writeCSV(path, rows) : void
+  + {static} split(s, delim) : vector<string>
+  + {static} toInt(s, def) : int
+  + {static} readInt(prompt) : int
+}
+
+' 继承（泛化）
+User <|-- Admin
+User <|-- Reader
+' 组合 / 聚合
+UserManager "1" o-- "0..*" User : 管理
+BookManager "1" o-- "0..*" Book : 管理
+' 依赖
+UserManager ..> FileUtil : 调用
+BookManager ..> FileUtil : 调用
+
+@enduml

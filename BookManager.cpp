@@ -12,61 +12,67 @@ using namespace std;
 
 BookManager::BookManager(const string& filePath) : path(filePath) {}
 
-// 从 CSV 加载图书。每行 8 个字段：编号,书名,作者,出版社,ISBN,分类,总库存,可借数量
-void BookManager::load() {
-    for (const auto& row : readCSV(path)) {
-        if (row.size() < 8) continue; // 字段不足的行跳过，防止越界
-        Book b(toInt(row[0]), row[1], row[2], row[3], row[4], row[5],
-               toInt(row[6]), toInt(row[7]));
-        books.push_back(b);
+BookManager::~BookManager() {
+    // 逐个释放 new 出来的资源对象；虚析构保证派生类被正确销毁
+    for (auto b : books) {
+        delete b;
     }
 }
 
-// 把所有图书写回 CSV
+// 从 CSV 加载。每行第一列是类型，后面字段按类型不同，工厂创建对应派生类。
+void BookManager::load() {
+    for (const auto& row : readCSV(path)) {
+        BookResource* r = BookResource::createFromCSV(row);
+        if (r) books.push_back(r);
+    }
+}
+
+// 写回 CSV：多态调用 toCSV，不同类型生成不同列
 void BookManager::save() const {
     vector<vector<string>> rows;
     for (const auto& b : books) {
-        rows.push_back(b.toCSV());
+        rows.push_back(b->toCSV());
     }
     writeCSV(path, rows);
 }
 
-// 列出全部图书
+// 列出全部资源：表头带“类型”列，showInfo 是多态调用，不同类型显示不同字段
 void BookManager::listBooks() const {
-    cout << "\n---------------- 图书列表 ----------------\n";
+    cout << "\n---------------- 图书资源列表 ----------------\n";
     cout << left
          << setw(6)  << "编号"
-         << setw(20) << "书名"
-         << setw(12) << "作者"
-         << setw(12) << "分类"
+         << setw(10) << "类型"
+         << setw(20) << "题名"
+         << setw(14) << "作者/期号/格式"
+         << setw(12) << "分类/ISSN/来源"
          << setw(8)  << "可借/总\n";
     for (const auto& b : books) {
-        b.printInfo();
+        b->showInfo(); // 虚函数调用：同一句代码，实际对象不同显示不同
     }
-    cout << "------------------------------------------\n";
+    cout << "----------------------------------------------\n";
 }
 
-// 按关键字搜索：在编号/书名/作者/分类里做“包含”匹配
+// 按关键字搜索：在编号/题名/出版社/类型名里做“包含”匹配
 void BookManager::searchBooks(const string& keyword) const {
     cout << "\n---------------- 搜索结果 ----------------\n";
     bool found = false;
     for (const auto& b : books) {
-        if (to_string(b.getId()).find(keyword) != string::npos ||
-            b.getTitle().find(keyword) != string::npos ||
-            b.getAuthor().find(keyword) != string::npos ||
-            b.getCategory().find(keyword) != string::npos) {
-            b.printInfo();
+        if (to_string(b->getId()).find(keyword) != string::npos ||
+            b->getTitle().find(keyword) != string::npos ||
+            b->getPublisher().find(keyword) != string::npos ||
+            b->getType().find(keyword) != string::npos) { // getType 也是虚函数
+            b->showInfo();
             found = true;
         }
     }
-    if (!found) cout << "没有找到匹配的图书。\n";
+    if (!found) cout << "没有找到匹配的资源。\n";
     cout << "------------------------------------------\n";
 }
 
-// 按编号查找，返回指向该图书的指针；找不到返回 nullptr
-Book* BookManager::findBook(int id) {
-    for (auto& b : books) {
-        if (b.getId() == id) return &b;
+// 按编号查找，返回基类指针；找不到返回 nullptr
+BookResource* BookManager::findBook(int id) {
+    for (auto b : books) {
+        if (b->getId() == id) return b;
     }
     return nullptr;
 }
@@ -75,77 +81,108 @@ Book* BookManager::findBook(int id) {
 int BookManager::getNextId() const {
     int maxId = 1000;
     for (const auto& b : books) {
-        if (b.getId() > maxId) maxId = b.getId();
+        if (b->getId() > maxId) maxId = b->getId();
     }
     return maxId + 1;
 }
 
-// 交互式新增图书（编号自动分配）
+// 交互式新增：先选资源类型，再输入该类型的专属字段
 void BookManager::addBook() {
-    cout << "\n---------- 新增图书 ----------\n";
+    cout << "\n---------- 新增图书资源 ----------\n";
+    cout << "  1. 一般图书   2. 杂志   3. 电子资源\n";
+    int type = readInt("请选择资源类型: ");
+    if (type < 1 || type > 3) {
+        cout << "无效的类型选择。\n";
+        return;
+    }
+
     int id = getNextId();
-    string title = readLine("书名: ");
-    string author = readLine("作者: ");
-    string publisher = readLine("出版社: ");
-    string isbn = readLine("ISBN: ");
-    string category = readLine("分类: ");
-    int total = readInt("总库存: ");
-    // 新增时所有书都可借，所以可借数量 = 总库存
-    books.push_back(Book(id, title, author, publisher, isbn, category, total, total));
+    string title = readLine("题名: ");
+    string publisher = readLine("出版社/来源: ");
+    int total = readInt("总数量: ");
+
+    BookResource* r = nullptr;
+    if (type == 1) {
+        string author = readLine("作者: ");
+        string isbn = readLine("ISBN: ");
+        string category = readLine("分类: ");
+        r = new GeneralBook(id, title, publisher, total, total, author, isbn, category);
+    } else if (type == 2) {
+        string issue = readLine("期号: ");
+        string issn = readLine("ISSN: ");
+        r = new Magazine(id, title, publisher, total, total, issue, issn);
+    } else {
+        string format = readLine("文件格式(PDF/EPUB等): ");
+        string url = readLine("下载地址/数据库: ");
+        r = new EResource(id, title, publisher, total, total, format, url);
+    }
+    // 新增时所有资源都可借，故可借数量 = 总数量
+    books.push_back(r);
     save();
-    cout << "新增成功，图书编号为 " << id << "。\n";
+    cout << "新增成功，资源编号为 " << id << "。\n";
 }
 
-// 直接添加一本图书（供初始化默认数据时使用，不读取键盘输入）
-void BookManager::addBook(const Book& b) {
+// 直接添加（默认数据初始化用），接管传入指针的所有权
+void BookManager::addBook(BookResource* b) {
     books.push_back(b);
 }
 
-// 删除指定编号的图书
+// 删除指定编号的资源
 void BookManager::deleteBook(int id) {
     for (auto it = books.begin(); it != books.end(); ++it) {
-        if (it->getId() == id) {
-            books.erase(it);
+        if ((*it)->getId() == id) {
+            delete *it;       // 先释放堆上的对象
+            books.erase(it);  // 再从容器移除
             save();
             cout << "删除成功。\n";
             return;
         }
     }
-    cout << "未找到编号为 " << id << " 的图书。\n";
+    cout << "未找到编号为 " << id << " 的资源。\n";
 }
 
-// 修改指定编号的图书（直接回车表示该项不修改）
+// 修改：公共字段 + 按类型修改专属字段（用 dynamic_cast 判断实际类型）
 void BookManager::updateBook(int id) {
-    Book* b = findBook(id);
+    BookResource* b = findBook(id);
     if (!b) {
-        cout << "未找到编号为 " << id << " 的图书。\n";
+        cout << "未找到编号为 " << id << " 的资源。\n";
         return;
     }
 
-    cout << "\n---------- 修改图书（直接回车表示不修改）----------\n";
-    string t = readLine("新书名(" + b->getTitle() + "): ");
+    cout << "\n---------- 修改资源（直接回车表示不修改）----------\n";
+    string t = readLine("新题名(" + b->getTitle() + "): ");
     if (!t.empty()) b->setTitle(t);
 
-    string a = readLine("新作者(" + b->getAuthor() + "): ");
-    if (!a.empty()) b->setAuthor(a);
-
-    string p = readLine("新出版社(" + b->getPublisher() + "): ");
+    string p = readLine("新出版社/来源(" + b->getPublisher() + "): ");
     if (!p.empty()) b->setPublisher(p);
 
-    string i = readLine("新ISBN(" + b->getIsbn() + "): ");
-    if (!i.empty()) b->setIsbn(i);
-
-    string c = readLine("新分类(" + b->getCategory() + "): ");
-    if (!c.empty()) b->setCategory(c);
-
-    string totalStr = readLine("新总库存(" + to_string(b->getTotal()) + "): ");
+    string totalStr = readLine("新总数量(" + to_string(b->getTotal()) + "): ");
     if (!totalStr.empty()) {
         int newTotal = toInt(totalStr, b->getTotal());
-        // 可借数量随总库存变化同步调整：可借 += (新总 - 原总)
         int diff = newTotal - b->getTotal();
         b->setTotal(newTotal);
-        b->setAvailable(b->getAvailable() + diff);
-        if (b->getAvailable() < 0) b->setAvailable(0); // 不能为负
+        b->setAvailable(b->getAvailable() + diff); // 可借数量随总数量同步调整
+        if (b->getAvailable() < 0) b->setAvailable(0);
+    }
+
+    // 不同类型有不同的专属字段，用 dynamic_cast 判断实际类型后分别处理
+    if (GeneralBook* g = dynamic_cast<GeneralBook*>(b)) {
+        string a = readLine("新作者(" + g->getAuthor() + "): ");
+        if (!a.empty()) g->setAuthor(a);
+        string i = readLine("新ISBN(" + g->getIsbn() + "): ");
+        if (!i.empty()) g->setIsbn(i);
+        string c = readLine("新分类(" + g->getCategory() + "): ");
+        if (!c.empty()) g->setCategory(c);
+    } else if (Magazine* m = dynamic_cast<Magazine*>(b)) {
+        string issue = readLine("新期号(" + m->getIssue() + "): ");
+        if (!issue.empty()) m->setIssue(issue);
+        string issn = readLine("新ISSN(" + m->getIssn() + "): ");
+        if (!issn.empty()) m->setIssn(issn);
+    } else if (EResource* e = dynamic_cast<EResource*>(b)) {
+        string format = readLine("新格式(" + e->getFormat() + "): ");
+        if (!format.empty()) e->setFormat(format);
+        string url = readLine("新下载地址(" + e->getUrl() + "): ");
+        if (!url.empty()) e->setUrl(url);
     }
     save();
     cout << "修改成功。\n";

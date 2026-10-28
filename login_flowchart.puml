@@ -1,0 +1,25 @@
+@startuml
+' 登录验证流程（UserManager::login）流程图（PlantUML 源码）
+' 使用方法：在 PlantUML 工具中打开此文件渲染成图片，插入设计报告。
+
+skinparam activityFontName "Microsoft YaHei"
+
+start
+:输入用户名 u、密码 p;
+:获取 users 容器（vector<User*>）;
+:指向第一个用户;
+while (是否还有下一个用户?) is (是)
+  if (当前用户的用户名 == u ?) then (是)
+    if (当前用户的密码 == p ?) then (是)
+      :返回当前用户的基类指针\n(登录成功);
+      stop
+    else (否)
+    endif
+  else (否)
+  endif
+  :指向下一个用户;
+endwhile (否)
+:返回 nullptr\n(用户名或密码错误);
+stop
+
+@enduml
