@@ -5,6 +5,7 @@
 
 #include "User.h"
 #include "FileUtil.h"
+#include "TemplateUtil.h" // 实验五：通用模板函数 findPtr / forEach
 #include <iostream>
 
 using namespace std;
@@ -116,27 +117,23 @@ void UserManager::addReader(const Reader& r) {
 }
 
 bool UserManager::usernameExists(const string& u) const {
-    for (auto x : users) {
-        if (x->getUsername() == u) return true;
-    }
-    return false;
+    // findPtr 查找第一个用户名匹配的元素，找到则返回非空指针
+    return findPtr(users, [&u](User* x) { return x->getUsername() == u; }) != nullptr;
 }
 
 User* UserManager::login(const string& u, const string& p) {
-    for (auto x : users) {
-        if (x->getUsername() == u && x->checkPassword(p)) {
-            return x; // 返回基类指针（可能是 Admin* 或 Reader*）
-        }
-    }
-    return nullptr;
+    // findPtr 查找用户名与密码都匹配的用户
+    return findPtr(users, [&](User* x) {
+        return x->getUsername() == u && x->checkPassword(p);
+    });
 }
 
 void UserManager::listAllUsers() const {
     cout << "\n---------------- 用户列表 ----------------\n";
-    for (const auto& u : users) {
-        // u->getRole() 是虚函数调用：同一句代码，实际对象不同返回不同角色名
+    // forEach 模板遍历；u->getRole() 是虚函数调用，多态返回不同角色名
+    forEach(users, [](User* u) {
         cout << "[" << u->getRole() << "] " << u->getUsername()
              << "  " << u->getName() << "\n";
-    }
+    });
     cout << "------------------------------------------\n";
 }

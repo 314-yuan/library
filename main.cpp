@@ -6,60 +6,14 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>  // system()
-#include <direct.h> // _mkdir()：Windows 下创建目录
 #include "User.h"
-#include "BookManager.h"
-#include "BorrowManager.h"
+#include "Library.h"
 #include "FileUtil.h"
 
 using namespace std;
 
-// 数据文件路径
+// 数据目录（所有 CSV 文件都放在该目录下，由 Library 统一管理）
 const string DATA_DIR = "data";
-const string USERS_FILE = DATA_DIR + "/users.csv";
-const string BOOKS_FILE = DATA_DIR + "/books.csv";
-const string RECORDS_FILE = DATA_DIR + "/records.csv";
-
-// 保证数据目录存在
-void ensureDataDir() {
-    _mkdir(DATA_DIR.c_str()); // 目录已存在时返回 -1，忽略即可
-}
-
-// 首次运行时生成默认数据文件（用户 + 图书资源）。
-// 用临时管理器写文件，避免和后面 load() 重复加载造成数据翻倍。
-void initDefaultData() {
-    // 默认用户
-    if (!fileExists(USERS_FILE)) {
-        UserManager tmp(USERS_FILE);
-        tmp.addAdmin(Admin("admin", "123456", "系统管理员"));
-        tmp.addReader(Reader("2023001", "123456", "张三", "男", "13800000000", 5));
-        tmp.addReader(Reader("2023002", "123456", "李四", "女", "13900000000", 5));
-        tmp.save();
-    }
-    // 默认图书资源：一般图书 + 杂志 + 电子资源（体现继承派生）
-    if (!fileExists(BOOKS_FILE)) {
-        BookManager tmp(BOOKS_FILE);
-        // 一般图书
-        tmp.addBook(new GeneralBook(1001, "C++ Primer", "人民邮电出版社", 10, 10,
-                                    "Stanley B. Lippman", "9787115333615", "编程"));
-        tmp.addBook(new GeneralBook(1002, "算法导论", "机械工业出版社", 8, 8,
-                                    "Thomas H. Cormen", "9787111407010", "计算机"));
-        tmp.addBook(new GeneralBook(1003, "三体", "重庆出版社", 15, 15,
-                                    "刘慈欣", "9787536692930", "科幻"));
-        tmp.addBook(new GeneralBook(1004, "红楼梦", "人民文学出版社", 5, 5,
-                                    "曹雪芹", "9787020002207", "文学"));
-        // 杂志
-        tmp.addBook(new Magazine(2001, "程序员", "CSDN", 20, 20, "2026-10", "1672-5945"));
-        tmp.addBook(new Magazine(2002, "读者", "读者出版集团", 30, 30, "2026-09", "1005-1803"));
-        // 电子资源
-        tmp.addBook(new EResource(3001, "C++标准库(电子版)", "电子工业出版社", 50, 50,
-                                  "PDF", "http://lib.example.com/3001"));
-        tmp.addBook(new EResource(3002, "深度学习综述", "中国知网", 99, 99,
-                                  "CAJ", "http://cnki.net/3002"));
-        tmp.save();
-    }
-    // 借阅记录文件首次运行时为空，无需预生成（BorrowManager::load 读不到文件返回空）。
-}
 
 // ==================== 登录主菜单 ====================
 int showLoginMenu() {
@@ -115,14 +69,20 @@ void adminBookMenu(BookManager& bm) {
 }
 
 // ==================== 登录后的功能循环（多态：基类指针调用 showMenu）====================
-void runUserLoop(User* user, UserManager& um, BookManager& bm, BorrowManager& brm) {
+// 参数改为 Library&：组合类作为统一入口，main 只需持有这一个对象。
+void runUserLoop(User* user, Library& lib) {
+    // 从 Library 取出三个成员对象的引用，供本函数使用
+    UserManager& um = lib.getUsers();
+    BookManager& bm = lib.getBooks();
+    BorrowManager& brm = lib.getRecords();
+
     if (dynamic_cast<Admin*>(user) != nullptr) {
         // ===== 管理员功能 =====
         while (true) {
             user->showMenu(); // 多态：显示管理员菜单
             int c = readInt("请选择: ");
             if (c == 1) {
-                adminBookMenu(bm); // 图书资源管理（实验三：支持三种资源类型）
+                adminBookMenu(bm); // 图书资源管理（支持三种资源类型）
             } else if (c == 2) {
                 um.listAllUsers(); // 读者管理：先展示用户列表
                 cout << "（读者增删改功能将在后续实验实现）\n";
@@ -183,17 +143,14 @@ void runUserLoop(User* user, UserManager& um, BookManager& bm, BorrowManager& br
 int main() {
     system("chcp 65001 >nul"); // 控制台设为 UTF-8，避免中文乱码
 
-    ensureDataDir();
+    // 实验四：用 Library 组合类替代原先分散的三个管理器对象。
+    // Library 内部组合了 UserManager / BookManager / BorrowManager，
+    // 统一负责数据目录、默认数据生成、加载与保存。
+    Library lib(DATA_DIR);
+    lib.initDefaultData(); // 首次运行生成默认数据文件（内部会先确保目录存在）
+    lib.load();            // 从 CSV 加载用户 / 图书资源 / 借阅记录
 
-    UserManager um(USERS_FILE);
-    BookManager bm(BOOKS_FILE);
-    BorrowManager brm(RECORDS_FILE);
-
-    initDefaultData(); // 首次运行生成默认数据文件
-
-    um.load();  // 从 CSV 加载用户
-    bm.load();  // 从 CSV 加载图书资源
-    brm.load(); // 从 CSV 加载借阅记录
+    UserManager& um = lib.getUsers(); // 登录与注册需要用到用户管理器
 
     // 登录循环：只有选择“0. 退出系统”才会结束
     while (true) {
@@ -206,7 +163,7 @@ int main() {
             User* user = um.login(u, p);
             if (user != nullptr && user->getRole() == "管理员") {
                 cout << "欢迎您，" << user->getName() << "（管理员）！\n";
-                runUserLoop(user, um, bm, brm);
+                runUserLoop(user, lib);
             } else {
                 cout << "登录失败：用户名或密码错误，或非管理员账号。\n";
             }
@@ -217,7 +174,7 @@ int main() {
             User* user = um.login(u, p);
             if (user != nullptr && user->getRole() == "读者") {
                 cout << "欢迎您，" << user->getName() << "（读者）！\n";
-                runUserLoop(user, um, bm, brm);
+                runUserLoop(user, lib);
             } else {
                 cout << "登录失败：用户名或密码错误，或非读者账号。\n";
             }

@@ -40,10 +40,12 @@ public:
     void setTotal(int t) { total = t; }
     void setAvailable(int a) { available = a; }
 
-    // ---------- 借阅相关（所有资源通用的逻辑）----------
-    bool canBorrow() const { return available > 0; }         // 是否还可借
-    void borrowOne() { if (available > 0) --available; }     // 借出一本
-    void returnOne() { if (available < total) ++available; } // 归还一本
+    // ---------- 借阅相关（虚函数）----------
+    // 默认实现针对“有物理副本”的资源（一般图书、杂志）：借阅扣减可借数量、
+    // 归还恢复。电子资源没有副本数量，会重写这三个函数（见 EResource）。
+    virtual bool canBorrow() const { return available > 0; }         // 是否还可借
+    virtual void borrowOne() { if (available > 0) --available; }     // 借出一本
+    virtual void returnOne() { if (available < total) ++available; } // 归还一本
 
     // ---------- 纯虚函数（= 0）----------
     // 不同资源类型“类型名、显示信息、CSV 序列化”都不同，故声明为纯虚，
@@ -113,13 +115,19 @@ private:
     std::string url;    // 下载地址或所在数据库
 
 public:
+    // 电子资源没有“副本数量”概念，构造时不再传 total/available
     EResource(int id, const std::string& title, const std::string& publisher,
-              int total, int available, const std::string& format,
-              const std::string& url);
+              const std::string& format, const std::string& url);
 
     std::string getType() const override;
     void showInfo() const override;
     std::vector<std::string> toCSV() const override;
+
+    // 电子资源可无限并发访问，不受副本数量限制：
+    // 始终可借；借阅/归还不改变任何数量（重写基类的默认实现）。
+    bool canBorrow() const override { return true; }
+    void borrowOne() override {}  // 电子资源不扣减数量
+    void returnOne() override {}  // 电子资源不恢复数量
 
     const std::string& getFormat() const { return format; }
     const std::string& getUrl() const { return url; }

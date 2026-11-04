@@ -41,7 +41,8 @@ BookResource* BookResource::createFromCSV(const vector<string>& f) {
             f.size() > 6 ? f[6] : "",  // 期号
             f.size() > 7 ? f[7] : ""); // ISSN
     } else if (type == "eresource") {
-        return new EResource(id, title, publisher, total, available,
+        // 电子资源无副本数量，不读 total/available，只取格式与下载地址
+        return new EResource(id, title, publisher,
             f.size() > 6 ? f[6] : "",  // 格式
             f.size() > 7 ? f[7] : ""); // 下载地址
     }
@@ -100,10 +101,11 @@ vector<string> Magazine::toCSV() const {
 
 // ==================== 派生类 EResource ====================
 
+// 电子资源不区分副本数量：total/available 对基类传 0 占位即可，
+// 借阅判断与数量增减已由 canBorrow/borrowOne/returnOne 重写覆盖。
 EResource::EResource(int id, const string& title, const string& publisher,
-                     int total, int available, const string& format,
-                     const string& url)
-    : BookResource(id, title, publisher, total, available),
+                     const string& format, const string& url)
+    : BookResource(id, title, publisher, 0, 0),
       format(format), url(url) {}
 
 string EResource::getType() const { return "电子资源"; }
@@ -115,10 +117,12 @@ void EResource::showInfo() const {
          << setw(20) << title
          << setw(14) << format
          << setw(12) << publisher
-         << setw(8)  << (to_string(available) + "/" + to_string(total)) << "\n";
+         << setw(8)  << "不限" << "\n"; // 电子资源无副本数量，显示“不限”
 }
 
 vector<string> EResource::toCSV() const {
+    // 电子资源没有副本数量，total/available 两列输出 0 占位，
+    // 仅为保持 CSV 列数与纸质资源一致（加载时会被解析为 0 并忽略）。
     return { "eresource", to_string(id), title, publisher,
-             to_string(total), to_string(available), format, url };
+             "0", "0", format, url };
 }

@@ -7,6 +7,7 @@
 #include "User.h"          // Reader
 #include "BookResource.h"  // BookResource
 #include "FileUtil.h"      // readCSV / writeCSV / 日期工具 / toInt
+#include "TemplateUtil.h"  // 实验五：通用模板函数 findValue
 #include <iostream>
 #include <iomanip>
 
@@ -58,12 +59,10 @@ void BorrowManager::save() const {
 }
 
 BorrowRecord* BorrowManager::findUnreturned(const string& username, int bookId) {
-    for (auto& r : records) {
-        if (!r.isReturned() && r.getUsername() == username && r.getBookId() == bookId) {
-            return &r;
-        }
-    }
-    return nullptr;
+    // findValue 在值容器 vector<BorrowRecord> 中查找第一条未归还记录
+    return findValue(records, [&](BorrowRecord& r) {
+        return !r.isReturned() && r.getUsername() == username && r.getBookId() == bookId;
+    });
 }
 
 // 借书：检查读者是否还有额度、资源是否可借、是否重复借，然后生成记录并更新双方状态
