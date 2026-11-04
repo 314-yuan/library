@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <iostream> // 实验六：ostream / istream 对象级持久化
 
 // ============================================================
 // 实验三：图书资源继承层级（继承与派生）
@@ -54,6 +55,15 @@ public:
     virtual void showInfo() const = 0;                  // 打印单条资源信息
     virtual std::vector<std::string> toCSV() const = 0; // 序列化为 CSV 一行
 
+    // ---------- 实验六：对象级持久化（输入输出流）----------
+    // writeTo：把本对象的全部字段直接写入输出流。派生类各自重写，
+    // 写入不同的专属字段（多态），即“不同类型的对象自己会写自己”。
+    virtual void writeTo(std::ostream& os) const = 0;
+
+    // readFrom：从输入流读出一行，交给 createFromCSV 工厂创建对应派生类。
+    // 读到文件尾返回 nullptr，供 BookManager 循环加载。
+    static BookResource* readFrom(std::istream& is);
+
     // 工厂式创建：根据 CSV 一行字段，按第一列“类型”new 出对应派生类。
     // 类似 UserManager::createUser，体现“用基类指针统一管理多种对象”。
     static BookResource* createFromCSV(const std::vector<std::string>& f);
@@ -75,6 +85,7 @@ public:
     std::string getType() const override;
     void showInfo() const override;
     std::vector<std::string> toCSV() const override;
+    void writeTo(std::ostream& os) const override;
 
     // 一般图书特有属性
     const std::string& getAuthor() const { return author; }
@@ -100,6 +111,7 @@ public:
     std::string getType() const override;
     void showInfo() const override;
     std::vector<std::string> toCSV() const override;
+    void writeTo(std::ostream& os) const override;
 
     const std::string& getIssue() const { return issue; }
     const std::string& getIssn() const { return issn; }
@@ -122,6 +134,7 @@ public:
     std::string getType() const override;
     void showInfo() const override;
     std::vector<std::string> toCSV() const override;
+    void writeTo(std::ostream& os) const override;
 
     // 电子资源可无限并发访问，不受副本数量限制：
     // 始终可借；借阅/归还不改变任何数量（重写基类的默认实现）。
@@ -134,5 +147,12 @@ public:
     void setFormat(const std::string& f) { format = f; }
     void setUrl(const std::string& u) { url = u; }
 };
+
+// ============================================================
+// 实验六：重载 << 运算符
+// out << *book 等价于 book->writeTo(out)，让“对象写入流”的语法更自然，
+// 同时运算符重载内部调用的是虚函数 writeTo，仍然保持运行时多态。
+// ============================================================
+std::ostream& operator<<(std::ostream& os, const BookResource& b);
 
 #endif

@@ -39,7 +39,6 @@ void registerReader(UserManager& um) {
     string gender = readLine("性别(男/女): ");
     string phone = readLine("联系电话: ");
     um.addReader(Reader(u, p, name, gender, phone, 5)); // 默认可借上限 5 本
-    um.save();
     cout << "注册成功！\n";
 }
 
@@ -111,19 +110,15 @@ void runUserLoop(User* user, Library& lib) {
                 BookResource* res = bm.findBook(id);
                 if (!res) {
                     cout << "未找到编号为 " << id << " 的资源。\n";
-                } else if (brm.borrow(reader, res)) {
-                    bm.save(); // 资源可借数量变化写回 books.csv
-                    um.save(); // 读者已借数量变化写回 users.csv
+                } else {
+                    brm.borrow(reader, res); // 实验六：关闭时统一保存，这里不再立即写文件
                 }
             } else if (c == 3) {
                 // 还书
                 int id = readInt("请输入要归还的资源编号: ");
                 BookResource* res = bm.findBook(id);
-                double fine = brm.returnBook(reader, id, res);
-                if (fine >= 0) {
-                    bm.save(); // 资源可借数量恢复写回
-                    um.save(); // 读者已借数量恢复写回
-                }
+                // 实验六：归还由 returnBook 内部处理，关闭时统一保存
+                brm.returnBook(reader, id, res);
             } else if (c == 4) {
                 // 续借
                 brm.renew(reader, readInt("请输入要续借的资源编号: "));
@@ -187,6 +182,11 @@ int main() {
             cout << "无效选择，请重新输入。\n";
         }
     }
+
+    // 实验六：关闭时保存。程序退出前一次性把内存中的用户/图书/借阅记录
+    // 全部写回 CSV 文件；下次启动时由 lib.load() 加载。
+    lib.save();
+    cout << "数据已保存。\n";
 
     return 0;
 }

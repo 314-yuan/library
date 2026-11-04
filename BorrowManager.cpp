@@ -88,7 +88,7 @@ bool BorrowManager::borrow(Reader* reader, BookResource* resource) {
                                    today, due));
     resource->borrowOne(); // 资源可借数量 -1
     reader->incBorrowed(); // 读者已借数量 +1
-    save();
+    // 实验六：关闭时统一保存，这里只改内存状态
     cout << "借阅成功！《" << resource->getTitle() << "》 应还日期：" << due << "。\n";
     return true;
 }
@@ -117,7 +117,6 @@ double BorrowManager::returnBook(Reader* reader, int bookId, BookResource* resou
 
     if (resource) resource->returnOne(); // 资源还在则恢复可借数量
     reader->decBorrowed();               // 读者已借数量 -1
-    save();
     cout << "归还成功！《" << r->getBookTitle() << "》。\n";
     return fine;
 }
@@ -135,7 +134,6 @@ bool BorrowManager::renew(Reader* reader, int bookId) {
         return false;
     }
     r->setDueDate(addDays(r->getDueDate(), BORROW_DAYS));
-    save();
     cout << "续借成功！新的应还日期：" << r->getDueDate() << "。\n";
     return true;
 }

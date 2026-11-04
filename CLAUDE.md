@@ -36,7 +36,7 @@
 - 实验三（已完成）：继承与派生 → 图书资源继承层级（`BookResource` → `GeneralBook`/`Magazine`/`EResource`）+ 借阅/归还/续借/逾期罚款（`BorrowManager`）。
 - 实验四（已完成）：多态与虚函数 → `BookResource` 声明虚函数（`showInfo()`/`toCSV()`/`getType()`）与虚析构函数，新增 `Library` 组合类统一管理 `UserManager`/`BookManager`/`BorrowManager`，基类指针 `vector<BookResource*>` 调用虚函数实现运行时多态。
 - 实验五（已完成）：模板与 vector → 新增 `TemplateUtil.h` 通用模板函数（`findPtr`/`findValue`/`forEach` 查找与遍历），`vector<BookResource*>`/`vector<BorrowRecord>` 的增删改查复用模板函数（push_back/erase/size/遍历）。
-- 实验六（待做）：输入输出流 → fstream 对象级持久化（多态资源存盘，不同类型字段不同），关闭时保存、重启时加载。
+- 实验六（已完成）：输入输出流 → `BookResource` 新增虚函数 `writeTo(std::ostream&)` 与静态工厂 `readFrom(std::istream&)`，重载 `operator<<` 实现对象级持久化（多态资源存盘，不同类型字段不同）；`BookManager::load/save` 改用 `ifstream/ofstream` 流；改为**关闭时保存**（退出前统一 `lib.save()`），重启时 `lib.load()` 加载。
 - 项目答辩（设计报告2）：整合完整系统 + 用户管理（登录/注册）+ 学生/教师信息管理。
 
 ## 默认账号（演示用）

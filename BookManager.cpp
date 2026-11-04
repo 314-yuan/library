@@ -8,6 +8,7 @@
 #include "TemplateUtil.h" // 实验五：通用模板函数 findPtr / forEach
 #include <iostream>
 #include <iomanip>
+#include <fstream>        // 实验六：ifstream / ofstream 文件流
 
 using namespace std;
 
@@ -20,21 +21,27 @@ BookManager::~BookManager() {
     }
 }
 
-// 从 CSV 加载。每行第一列是类型，后面字段按类型不同，工厂创建对应派生类。
+// 实验六：对象级加载。打开输入文件流，逐行调用 readFrom 工厂创建派生类对象，
+// 直到读到文件尾（readFrom 返回 nullptr）。
 void BookManager::load() {
-    for (const auto& row : readCSV(path)) {
-        BookResource* r = BookResource::createFromCSV(row);
-        if (r) books.push_back(r);
+    ifstream in(path);
+    BookResource* r = nullptr;
+    while ((r = BookResource::readFrom(in)) != nullptr) {
+        books.push_back(r);
     }
 }
 
-// 写回 CSV：多态调用 toCSV，不同类型生成不同列
+// 实验六：对象级存盘。打开输出文件流，用重载的 << 把每个对象写入流；
+// 内部调用虚函数 writeTo，不同类型写出不同字段（多态）。
 void BookManager::save() const {
-    vector<vector<string>> rows;
-    for (const auto& b : books) {
-        rows.push_back(b->toCSV());
+    ofstream out(path);
+    if (!out) {
+        cerr << "错误：无法写入文件 " << path << endl;
+        return;
     }
-    writeCSV(path, rows);
+    for (const auto& b : books) {
+        out << *b;
+    }
 }
 
 // 列出全部资源：表头带“类型”列，showInfo 是多态调用，不同类型显示不同字段
@@ -118,8 +125,8 @@ void BookManager::addBook() {
         r = new EResource(id, title, publisher, format, url);
     }
     // 新增时纸质资源都可借，故可借数量 = 总数量（电子资源无此概念）
+    // 注意：实验六改为“关闭时保存”，这里只改内存，不再立即写文件。
     books.push_back(r);
-    save();
     cout << "新增成功，资源编号为 " << id << "。\n";
 }
 
@@ -134,7 +141,6 @@ void BookManager::deleteBook(int id) {
         if ((*it)->getId() == id) {
             delete *it;       // 先释放堆上的对象
             books.erase(it);  // 再从容器移除
-            save();
             cout << "删除成功。\n";
             return;
         }
@@ -188,6 +194,5 @@ void BookManager::updateBook(int id) {
         string url = readLine("新下载地址(" + e->getUrl() + "): ");
         if (!url.empty()) e->setUrl(url);
     }
-    save();
     cout << "修改成功。\n";
 }

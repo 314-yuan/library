@@ -49,6 +49,24 @@ BookResource* BookResource::createFromCSV(const vector<string>& f) {
     return nullptr; // 未知类型，跳过该行
 }
 
+// 实验六：重载 << 运算符。内部调用虚函数 writeTo，
+// 因此 out << *book 对不同类型的 book 会写出不同的字段（多态）。
+ostream& operator<<(ostream& os, const BookResource& b) {
+    b.writeTo(os);
+    return os;
+}
+
+// 实验六：从输入流读出一行，按 "," 拆字段（顺带 trim），
+// 再交给 createFromCSV 工厂创建对应派生类对象。
+BookResource* BookResource::readFrom(istream& is) {
+    string line;
+    if (!getline(is, line)) return nullptr; // 读到文件尾或出错
+    if (line.empty()) return nullptr;       // 跳过空行
+    vector<string> f = split(line, ',');
+    for (auto& s : f) s = trim(s);          // 去掉字段首尾空白
+    return createFromCSV(f);
+}
+
 // ==================== 派生类 GeneralBook ====================
 
 GeneralBook::GeneralBook(int id, const string& title, const string& publisher,
@@ -74,6 +92,14 @@ vector<string> GeneralBook::toCSV() const {
              to_string(total), to_string(available), author, isbn, category };
 }
 
+// 实验六：把一般图书的字段用 << 依次写入流，字段间用逗号分隔。
+// 类型标记 "book" 写在最前，加载时据此工厂创建对象。
+void GeneralBook::writeTo(ostream& os) const {
+    os << "book" << "," << id << "," << title << "," << publisher << ","
+       << total << "," << available << "," << author << "," << isbn << ","
+       << category << "\n";
+}
+
 // ==================== 派生类 Magazine ====================
 
 Magazine::Magazine(int id, const string& title, const string& publisher,
@@ -97,6 +123,12 @@ void Magazine::showInfo() const {
 vector<string> Magazine::toCSV() const {
     return { "magazine", to_string(id), title, publisher,
              to_string(total), to_string(available), issue, issn };
+}
+
+// 实验六：杂志的字段与一般图书不同（期号、ISSN），写出的列也不同。
+void Magazine::writeTo(ostream& os) const {
+    os << "magazine" << "," << id << "," << title << "," << publisher << ","
+       << total << "," << available << "," << issue << "," << issn << "\n";
 }
 
 // ==================== 派生类 EResource ====================
@@ -125,4 +157,11 @@ vector<string> EResource::toCSV() const {
     // 仅为保持 CSV 列数与纸质资源一致（加载时会被解析为 0 并忽略）。
     return { "eresource", to_string(id), title, publisher,
              "0", "0", format, url };
+}
+
+// 实验六：电子资源无副本数量，total/available 用 0 占位，
+// 写出的字段是格式与下载地址。
+void EResource::writeTo(ostream& os) const {
+    os << "eresource" << "," << id << "," << title << "," << publisher << ","
+       << "0,0," << format << "," << url << "\n";
 }
